@@ -222,7 +222,7 @@ function ProofForm({ onClose, onSubmit }) {
   );
 }
 
-function LoginBox({ onSuccess }) {
+function LoginBox({ onSuccess, notify }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
 
@@ -320,11 +320,32 @@ function App() {
   };
 
   const downloadEventSummary = (entry) => {
-    const net = Number(entry.raised || 0) - Number(entry.spent || 0);
-    const reportTitle = `${entry.name || 'Event'} Summary`;
+    if (!entry) return;
+
+    const eventName = entry.name || 'Event';
+    const targetBudget = Number(entry.target ?? data.activeEvent?.target ?? 0);
+    const reportGeneratedOn = today();
+    const eventDate = entry.startDate || entry.endDate || entry.date || reportGeneratedOn;
+
+    const currentRaised = Number(
+      entry.raised ?? (
+        data.activeEvent && entry.id === data.activeEvent.id
+          ? data.donations.filter((item) => item.status === 'Verified').reduce((sum, item) => sum + Number(item.amount), 0)
+          : 0
+      )
+    );
+
+    const currentSpent = Number(
+      entry.spent ?? (
+        data.activeEvent && entry.id === data.activeEvent.id
+          ? data.expenses.reduce((sum, item) => sum + Number(item.amount), 0)
+          : 0
+      )
+    );
+
+    const net = currentRaised - currentSpent;
     const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
     const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
     const margin = 40;
     const leftColX = 60;
     const rightColX = 260;
@@ -336,23 +357,22 @@ function App() {
     pdf.setTextColor(255, 255, 255);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(24);
-    pdf.text(reportTitle, margin, 48);
+    pdf.text(`${eventName} Summary`, margin, 48);
 
     pdf.setTextColor(30, 41, 59);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(18);
     pdf.text('Accountancy Details', margin, 120);
-
     pdf.setDrawColor(203, 213, 225);
     pdf.line(margin, 130, pageWidth - margin, 130);
 
     const rows = [
-      ['Event Name', entry.name || 'Untitled Event'],
-      ['Report Generated', fmtDate(today())],
-      ['Event Date', fmtDate(entry.date)],
-      ['Target Budget', INR(entry.target)],
-      ['Total Raised', INR(entry.raised)],
-      ['Total Spent', INR(entry.spent)],
+      ['Event Name', eventName],
+      ['Report Generated', fmtDate(reportGeneratedOn)],
+      ['Event Date', fmtDate(eventDate)],
+      ['Target Budget', INR(targetBudget)],
+      ['Total Raised', INR(currentRaised)],
+      ['Total Spent', INR(currentSpent)],
       ['Net Result', `${net >= 0 ? 'Surplus' : 'Deficit'} ${INR(Math.abs(net))}`],
       ['Reserve Fund', INR(data.reserveFund)],
     ];
@@ -365,20 +385,16 @@ function App() {
       const isEven = index % 2 === 0;
       pdf.setFillColor(isEven ? 248 : 255, isEven ? 250 : 255, isEven ? 252 : 255);
       pdf.rect(margin - 8, y - 14, pageWidth - (margin * 2) + 16, rowHeight + 4, 'F');
-
       pdf.setTextColor(71, 85, 105);
       pdf.text(label, leftColX, y);
-
       pdf.setTextColor(15, 23, 42);
       pdf.text(String(value), rightColX, y, { maxWidth: pageWidth - rightColX - margin });
-
       y += rowHeight;
     });
 
     y += 18;
     pdf.setDrawColor(203, 213, 225);
     pdf.line(margin, y, pageWidth - margin, y);
-
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(15, 23, 42);
     pdf.setFontSize(18);
@@ -389,8 +405,8 @@ function App() {
     pdf.setTextColor(51, 65, 85);
 
     const summaryLines = [
-      `This report covers the ${entry.name || 'event'} accountancy for ${fmtDate(entry.date)}.`,
-      `Total contributions received were ${INR(entry.raised)}, while total expenses were ${INR(entry.spent)}.`,
+      `This report covers the ${eventName} accountancy for ${fmtDate(eventDate)}.`,
+      `Total contributions received were ${INR(currentRaised)}, while total expenses were ${INR(currentSpent)}.`,
       `The final outcome is ${net >= 0 ? 'a surplus' : 'a deficit'} of ${INR(Math.abs(net))}.`,
       `The reserve fund carried forward is ${INR(data.reserveFund)}.`,
     ];
@@ -402,14 +418,18 @@ function App() {
       summaryY += wrapped.length * 18 + 6;
     });
 
-    const safeName = (entry.name || 'event')
+    const safeName = (eventName || 'event')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '') || 'event';
 
-    pdf.save(`${safeName}-summary-${today()}.pdf`);
+    pdf.save(`${safeName}-summary-${reportGeneratedOn}.pdf`);
     notify('PDF downloaded successfully');
   };
+
+  const renderedAdminLogin = (
+    <LoginBox onSuccess={() => setAdminReady(true)} notify={notify} />
+  );
 
   const raised = useMemo(
     () => data.donations.filter((item) => item.status === 'Verified').reduce((sum, item) => sum + Number(item.amount), 0),
@@ -450,20 +470,20 @@ function App() {
 
   return (
     <div className={`min-h-screen ${isDark ? 'theme-dark' : 'theme-light'}`}>
-      <div className={`min-h-screen ${isDark ? 'bg-[#070b16] text-slate-100' : 'bg-[#f3f6fb] text-slate-800'}`}>
-        <header className="bg-gradient-to-br from-orange-600 via-rose-500 to-fuchsia-600 text-white shadow-[0_18px_45px_rgba(249,115,22,0.25)]">
+      <div className={`min-h-screen ${isDark ? 'bg-[#090909] text-[#f5e7c4]' : 'bg-[#f5efe2] text-[#111111]'}`}>
+        <header className={`${isDark ? 'bg-gradient-to-br from-[#1a1207] via-[#2e1d09] to-[#8a6323] text-[#f9e8b5]' : 'bg-gradient-to-br from-[#0f0f0f] via-[#2b2b2b] to-[#6e5d4e] text-[#f8f0d8]'} shadow-[0_18px_45px_rgba(212,175,55,0.15)]`}>
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.25em] text-orange-100">Community event & fund portal</p>
-                <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{appConfig.apartmentName}</h1>
+                <p className={`text-[10px] uppercase tracking-[0.25em] ${isDark ? 'text-[#d9b86c]' : 'text-[#d7c38f]'}`}>Community event & fund portal</p>
+                <h1 className={`mt-2 text-2xl font-bold sm:text-3xl ${isDark ? 'text-[#f8e8be]' : 'text-[#f9f1d7]'}`}>{appConfig.apartmentName}</h1>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setTheme(isDark ? 'light' : 'dark')}
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/15"
+                  className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition ${isDark ? 'border-[#d4af37]/40 bg-[#201b12] text-[#f7e8b5] hover:bg-[#2a2113]' : 'border-[#111111]/20 bg-[#171717] text-[#f5efe0] hover:bg-[#2a2a2a]'}`}
                 >
                   {isDark ? <SunMedium size={16} /> : <MoonStar size={16} />}
                   {isDark ? 'Light mode' : 'Dark mode'}
@@ -471,7 +491,7 @@ function App() {
 
                 <button
                   type="button"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/15 sm:w-auto"
+                  className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium sm:w-auto ${isDark ? 'border-[#d4af37]/40 bg-[#201b12] text-[#f7e8b5] hover:bg-[#2a2113]' : 'border-[#111111]/20 bg-[#111111] text-[#f7f0dc] hover:bg-[#2f2a25]'}`}
                   onClick={() => setShowAdmin(true)}
                 >
                   {adminReady ? <ShieldCheck size={16} /> : <Lock size={16} />}
@@ -483,20 +503,27 @@ function App() {
         </header>
 
         <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+          <section className={`${isDark ? 'rounded-3xl border border-[#d4af37]/30 bg-[#121212] p-5 shadow-[0_16px_36px_rgba(12,10,7,0.8)]' : 'rounded-3xl border border-[#1b1b1b]/10 bg-[#f9f3e7] p-5 shadow-[0_14px_30px_rgba(17,17,17,0.08)]'}`}>
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Live</span>
-                <h2 className="mt-2 text-2xl font-bold text-slate-800">{data.activeEvent ? data.activeEvent.name : 'No active event'}</h2>
-                {data.activeEvent && <p className="mt-1 text-sm text-slate-500">{fmtDate(data.activeEvent.startDate)} - {fmtDate(data.activeEvent.endDate)}</p>}
+                <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${isDark ? 'bg-[#d4af37]/15 text-[#f0d786]' : 'bg-[#111111] text-[#f5efe0]'}`}>Live</span>
+                <h2 className={`mt-2 text-2xl font-bold ${isDark ? 'text-[#f5e7c4]' : 'text-[#141414]'}`}>{data.activeEvent ? data.activeEvent.name : 'No active event'}</h2>
+                {data.activeEvent && <p className={`mt-1 text-sm ${isDark ? 'text-[#d6c296]' : 'text-[#4a4138]'}`}>{fmtDate(data.activeEvent.startDate)} - {fmtDate(data.activeEvent.endDate)}</p>}
               </div>
 
               {data.activeEvent && (
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => setShowUPI(true)}>
+                  <Button
+                    className={isDark ? 'bg-[#d4af37] text-[#17130a] hover:bg-[#e5c76d]' : 'bg-[#111111] text-[#f7f0dc] hover:bg-[#2a2a2a]'}
+                    onClick={() => setShowUPI(true)}
+                  >
                     <QrCode size={16} /> Contribute via UPI
                   </Button>
-                  <Button variant="outline" onClick={() => setShowProof(true)}>
+                  <Button
+                    variant="outline"
+                    className={isDark ? 'border-[#d4af37]/40 bg-[#1d1a15] text-[#f5e7c4] hover:bg-[#261f17]' : 'border-[#111111]/20 bg-[#f4ebd7] text-[#111111] hover:bg-[#e7d7b4]'}
+                    onClick={() => setShowProof(true)}
+                  >
                     <Upload size={16} /> Submit proof
                   </Button>
                 </div>
@@ -505,15 +532,15 @@ function App() {
 
             {data.activeEvent && (
               <div className="mt-6">
-                <div className="mb-2 flex items-center justify-between text-sm text-slate-600">
+                <div className={`mb-2 flex items-center justify-between text-sm ${isDark ? 'text-[#d3bb7d]' : 'text-[#2d2a28]'}`}>
                   <span>
-                    {INR(raised)} <span className="text-slate-400">/ {INR(data.activeEvent.target)}</span>
+                    {INR(raised)} <span className={isDark ? 'text-[#a9976f]' : 'text-[#5c554d]'}>/ {INR(data.activeEvent.target)}</span>
                   </span>
-                  <span className="font-semibold text-orange-600">{progressPercentage}%</span>
+                  <span className={`font-semibold ${isDark ? 'text-[#f0d786]' : 'text-[#111111]'}`}>{progressPercentage}%</span>
                 </div>
-                <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                <div className={`h-3 overflow-hidden rounded-full ${isDark ? 'bg-[#1d1a15]' : 'bg-[#e6dcc4]'}`}>
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-orange-500 to-rose-500 transition-all duration-700"
+                    className="h-full rounded-full bg-gradient-to-r from-[#111111] to-[#7a6849] transition-all duration-700"
                     style={{ width: `${progressPercentage}%` }}
                   />
                 </div>
@@ -528,8 +555,8 @@ function App() {
           )}
 
           {!loading && (
-            <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
-              <div className="flex border-b border-slate-200 text-sm font-medium">
+            <section className={`${isDark ? 'overflow-hidden rounded-3xl border border-[#d4af37]/30 bg-[#121212] shadow-[0_16px_36px_rgba(12,10,7,0.8)]' : 'overflow-hidden rounded-3xl border border-[#1b1b1b]/10 bg-[#f9f3e7] shadow-[0_14px_30px_rgba(17,17,17,0.08)]'}`}>
+              <div className={`flex border-b ${isDark ? 'border-[#d4af37]/30' : 'border-[#1b1b1b]/10'} text-sm font-medium`}>
                 { [
                   ['income', 'Income'],
                   ['expenses', 'Expenses & bills'],
@@ -538,7 +565,7 @@ function App() {
                   <button
                     key={key}
                     type="button"
-                    className={`flex-1 px-4 py-3 ${tab === key ? 'border-b-2 border-orange-600 text-orange-600' : 'text-slate-500'}`}
+                    className={`flex-1 px-4 py-3 ${tab === key ? (isDark ? 'border-b-2 border-[#d4af37] text-[#f0d786]' : 'border-b-2 border-[#111111] text-[#111111]') : (isDark ? 'text-[#d3bb7d]' : 'text-[#3d3d3d]')}`}
                     onClick={() => setTab(key)}
                   >
                     {label}
@@ -550,19 +577,20 @@ function App() {
                 {tab === 'income' && (
                   <>
                     <div className="relative mb-4">
-                      <Search size={16} className="absolute left-3 top-3.5 text-slate-400" />
+                      <Search size={16} className={`absolute left-3 top-3.5 ${isDark ? 'text-[#c7a45c]' : 'text-[#4a4138]'}`} />
                       <input
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
                         placeholder="Search flat no. or resident name"
-                        className="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                        className={`w-full rounded-xl border py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 ${isDark ? 'border-[#d4af37]/30 bg-[#1a1a1a] text-[#f5e7c4] placeholder:text-[#9c8860] focus:border-[#d4af37] focus:ring-[#d4af37]/20' : 'border-[#1b1b1b]/15 bg-[#f4ebd7] text-[#111111] placeholder:text-[#6d6254] focus:border-[#111111] focus:ring-[#111111]/10'}`}
                       />
                     </div>
 
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-left text-sm">
                         <thead>
-                          <tr className="border-b border-slate-200 text-slate-500">
+                          <tr className={isDark ? 'border-b border-[#d4af37]/20 text-[#d7bf7d]' : 'border-b border-[#1b1b1b]/10 text-[#2d2a28]'}
+                          >
                             <th className="pb-2 pr-4 font-medium">Flat</th>
                             <th className="pb-2 pr-4 font-medium">Resident</th>
                             <th className="pb-2 pr-4 text-right font-medium">Amount</th>
@@ -573,13 +601,13 @@ function App() {
                         </thead>
                         <tbody>
                           {filteredDonations.map((donation) => (
-                            <tr key={donation.id} className="border-b border-slate-100 align-middle">
-                              <td className="py-3 pr-4 font-medium text-slate-800">{donation.flat}</td>
-                              <td className="py-3 pr-4 text-slate-700">{donation.residentName || 'Anonymous'}</td>
-                              <td className="py-3 pr-4 text-right font-semibold text-slate-800">{INR(donation.amount)}</td>
-                              <td className="py-3 pr-4 text-slate-600">{donation.mode}</td>
+                            <tr key={donation.id} className={isDark ? 'border-b border-[#2a241b] align-middle' : 'border-b border-[#e2d6b8] align-middle'}>
+                              <td className={`py-3 pr-4 font-medium ${isDark ? 'text-[#f2dfac]' : 'text-[#141414]'}`}>{donation.flat}</td>
+                              <td className={`py-3 pr-4 ${isDark ? 'text-[#ead9a2]' : 'text-[#2e2a27]'}`}>{donation.residentName || 'Anonymous'}</td>
+                              <td className={`py-3 pr-4 text-right font-semibold ${isDark ? 'text-[#f7eac3]' : 'text-[#111111]'}`}>{INR(donation.amount)}</td>
+                              <td className={`py-3 pr-4 ${isDark ? 'text-[#d4b469]' : 'text-[#52473d]'}`}>{donation.mode}</td>
                               <td className="py-3 pr-4"><Badge status={donation.status} /></td>
-                              <td className="py-3 text-slate-500">{fmtDate(donation.date)}</td>
+                              <td className={`py-3 ${isDark ? 'text-[#b9a26d]' : 'text-[#5b5149]'}`}>{fmtDate(donation.date)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -587,7 +615,7 @@ function App() {
                     </div>
 
                     {!filteredDonations.length && (
-                      <div className="rounded-2xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">No donations match this search.</div>
+                      <div className={`rounded-2xl px-4 py-8 text-center text-sm ${isDark ? 'bg-[#1a1a1a] text-[#d3bb7d]' : 'bg-[#f1e5c9] text-[#2d2a28]'}`}>No donations match this search.</div>
                     )}
                   </>
                 )}
@@ -595,20 +623,20 @@ function App() {
                 {tab === 'expenses' && (
                   <div className="space-y-3">
                     {data.expenses.map((expense) => (
-                      <div key={expense.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div key={expense.id} className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${isDark ? 'border-[#d4af37]/20 bg-[#17130d]' : 'border-[#1b1b1b]/10 bg-[#f4ebd7]'}`}>
                         <div className="min-w-0">
-                          <span className="inline-flex rounded-full bg-orange-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-orange-700">
+                          <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${isDark ? 'bg-[#d4af37]/15 text-[#f0d786]' : 'bg-[#111111] text-[#f5efe0]'}`}>
                             {expense.category}
                           </span>
-                          <p className="mt-2 font-semibold text-slate-800">{expense.description}</p>
-                          <p className="mt-1 text-xs text-slate-500">{expense.vendor} · {fmtDate(expense.date)}</p>
+                          <p className={`mt-2 font-semibold ${isDark ? 'text-[#f5e7c4]' : 'text-[#111111]'}`}>{expense.description}</p>
+                          <p className={`mt-1 text-xs ${isDark ? 'text-[#c0a668]' : 'text-[#4d4a47]'}`}>{expense.vendor} · {fmtDate(expense.date)}</p>
                         </div>
                         <div className="shrink-0 text-left sm:text-right">
-                          <p className="text-lg font-bold text-slate-800">{INR(expense.amount)}</p>
+                          <p className={`text-lg font-bold ${isDark ? 'text-[#f7eac3]' : 'text-[#111111]'}`}>{INR(expense.amount)}</p>
                           <button
                             type="button"
                             onClick={() => setReceiptModal(expense)}
-                            className="mt-1 inline-flex items-center gap-2 text-xs font-medium text-orange-600 hover:text-orange-700"
+                            className={`mt-1 inline-flex items-center gap-2 text-xs font-medium ${isDark ? 'text-[#f0d786] hover:text-[#f9e8b5]' : 'text-[#111111] hover:text-[#3b3b3b]'}`}
                           >
                             <Receipt size={12} /> View receipt
                           </button>
@@ -623,27 +651,27 @@ function App() {
                     {data.history.map((entry) => {
                       const diff = entry.raised - entry.spent;
                       return (
-                        <div key={entry.id} className="rounded-2xl border border-slate-200 p-4">
+                        <div key={entry.id} className={`rounded-2xl border p-4 ${isDark ? 'border-[#d4af37]/20 bg-[#17130d]' : 'border-[#1b1b1b]/10 bg-[#f4ebd7]'}`}>
                           <div className="flex items-center justify-between gap-3">
-                            <h3 className="font-semibold text-slate-800">{entry.name}</h3>
-                            <span className="text-xs text-slate-500">{fmtDate(entry.date)}</span>
+                            <h3 className={isDark ? 'font-semibold text-[#f5e7c4]' : 'font-semibold text-[#111111]'}>{entry.name}</h3>
+                            <span className={isDark ? 'text-xs text-[#c0a668]' : 'text-xs text-[#554f49]'}>{fmtDate(entry.date)}</span>
                           </div>
                           <div className="mt-4 grid gap-3 sm:grid-cols-4">
                             <div>
-                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Budget</p>
-                              <p className="mt-1 font-semibold text-slate-800">{INR(entry.target)}</p>
+                              <p className={`text-[11px] uppercase tracking-[0.12em] ${isDark ? 'text-[#d7bf7d]' : 'text-[#3d3d3d]'}`}>Budget</p>
+                              <p className={`mt-1 font-semibold ${isDark ? 'text-[#f7eac3]' : 'text-[#111111]'}`}>{INR(entry.target)}</p>
                             </div>
                             <div>
-                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Raised</p>
-                              <p className="mt-1 font-semibold text-slate-800">{INR(entry.raised)}</p>
+                              <p className={`text-[11px] uppercase tracking-[0.12em] ${isDark ? 'text-[#d7bf7d]' : 'text-[#3d3d3d]'}`}>Raised</p>
+                              <p className={`mt-1 font-semibold ${isDark ? 'text-[#f7eac3]' : 'text-[#111111]'}`}>{INR(entry.raised)}</p>
                             </div>
                             <div>
-                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Spent</p>
-                              <p className="mt-1 font-semibold text-slate-800">{INR(entry.spent)}</p>
+                              <p className={`text-[11px] uppercase tracking-[0.12em] ${isDark ? 'text-[#d7bf7d]' : 'text-[#3d3d3d]'}`}>Spent</p>
+                              <p className={`mt-1 font-semibold ${isDark ? 'text-[#f7eac3]' : 'text-[#111111]'}`}>{INR(entry.spent)}</p>
                             </div>
                             <div>
-                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">{diff >= 0 ? 'Surplus' : 'Deficit'}</p>
-                              <p className={`mt-1 font-semibold ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              <p className={`text-[11px] uppercase tracking-[0.12em] ${isDark ? 'text-[#d7bf7d]' : 'text-[#3d3d3d]'}`}>{diff >= 0 ? 'Surplus' : 'Deficit'}</p>
+                              <p className={`mt-1 font-semibold ${diff >= 0 ? (isDark ? 'text-[#8ee0a8]' : 'text-[#1a6b3f]') : (isDark ? 'text-[#f7b7b7]' : 'text-[#9a2b2b]')}`}>
                                 {diff >= 0 ? '+' : '-'}{INR(Math.abs(diff))}
                               </p>
                             </div>
@@ -657,15 +685,15 @@ function App() {
                         <button
                           type="button"
                           onClick={() => downloadEventSummary(data.history[0])}
-                          className="inline-flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100"
+                          className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${isDark ? 'border-[#d4af37]/40 bg-[#1f1a12] text-[#f0d786] hover:bg-[#2b241a]' : 'border-[#111111]/15 bg-[#111111] text-[#f7f0dc] hover:bg-[#2a2a2a]'}`}
                         >
                           <Download size={14} /> Download summary
                         </button>
                       </div>
                     )}
 
-                    <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                      <span className="font-semibold text-slate-800">Reserve fund:</span> {INR(data.reserveFund)} carried forward for future community events.
+                    <div className={`rounded-2xl p-4 text-sm ${isDark ? 'bg-[#17130d] text-[#e8d4a3]' : 'bg-[#f1e5c9] text-[#1b1b1b]'}`}>
+                      <span className={isDark ? 'font-semibold text-[#f7eac3]' : 'font-semibold text-[#111111]'}>Reserve fund:</span> {INR(data.reserveFund)} carried forward for future community events.
                     </div>
                   </div>
                 )}
@@ -701,10 +729,13 @@ function App() {
               <li>Once verified, the amount appears in the public ledger.</li>
             </ol>
 
-            <Button className="mt-5 w-full" onClick={() => {
-              setShowUPI(false);
-              setShowProof(true);
-            }}>
+            <Button
+              className="mt-5 w-full"
+              onClick={() => {
+                setShowUPI(false);
+                setShowProof(true);
+              }}
+            >
               <ArrowUpRight size={16} /> I have paid — submit proof
             </Button>
           </Modal>
@@ -757,7 +788,7 @@ function App() {
         {showAdmin && (
           <Modal title="Organizer panel" wide onClose={() => setShowAdmin(false)}>
             {!adminReady ? (
-              <LoginBox onSuccess={() => setAdminReady(true)} />
+              renderedAdminLogin
             ) : (
               <AdminPanel
                 data={data}
@@ -907,6 +938,7 @@ function AdminPanel({ data, setData, onClose, onLogout, notify }) {
               </div>
             ))
           )}
+          
         </div>
       )}
 
@@ -921,7 +953,7 @@ function AdminPanel({ data, setData, onClose, onLogout, notify }) {
                 <span className="mb-1 block">Payment mode</span>
                 <select
                   value={donationForm.mode}
-                  onChange={(event) => setDonationForm({ ...donationForm, mode: event.target.value })}
+                  onChange={(event) => setDonationForm({ ...donationForm, "mode": event.target.value })}
                   className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="UPI">UPI</option>
