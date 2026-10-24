@@ -1,9 +1,9 @@
 export const appConfig = {
   apartmentName: 'Sri Balaji Serene Apartment',
-  adminPassword: import.meta.env.VITE_APP_ADMIN_PASSWORD || '',
+  adminPassword: import.meta.env.VITE_APP_ADMIN_PASSWORD?.trim() || '',
 };
 
-export const UPI_ID = 'sribalajiserene@okhdfcbank';
+export const UPI_ID = import.meta.env.VITE_UPI_ID?.trim() || 'sribalajiserene@okhdfcbank';
 
 export const mockData = {
   reserveFund: 18500,

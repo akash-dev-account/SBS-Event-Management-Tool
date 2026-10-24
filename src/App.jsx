@@ -7,12 +7,14 @@ import {
   Copy,
   IndianRupee,
   Lock,
+  MoonStar,
   PiggyBank,
   Plus,
   QrCode,
   Receipt,
   Search,
   ShieldCheck,
+  SunMedium,
   TrendingUp,
   Upload,
   Wallet,
@@ -74,9 +76,14 @@ function Modal({ title, onClose, children, wide = false }) {
 }
 
 function Input({ label, ...props }) {
+  const isRequired = props.required || false;
+
   return (
     <label className="mb-3 block text-sm text-slate-700">
-      <span className="mb-1 block">{label}</span>
+      <span className="mb-1 block">
+        {label}
+        {isRequired && <span className="ml-1 text-rose-500">*</span>}
+      </span>
       <input
         {...props}
         className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
@@ -148,12 +155,15 @@ function ProofForm({ onClose, onSubmit }) {
 
   return (
     <Modal title="Submit payment proof" onClose={onClose}>
-      <Input label="Flat No." value={form.flat} onChange={update('flat')} placeholder="A-101" />
-      <Input label="Resident Name" value={form.name} onChange={update('name')} placeholder="Your name" />
-      <Input label="Amount (₹)" type="number" value={form.amount} onChange={update('amount')} placeholder="2000" />
-      <Input label="UTR / Reference No. (min 8 digits)" value={form.utr} onChange={update('utr')} placeholder="123456789012" />
+      <Input label="Flat No." value={form.flat} onChange={update('flat')} placeholder="A-101" required />
+      <Input label="Resident Name" value={form.name} onChange={update('name')} placeholder="Your name" required />
+      <Input label="Amount (₹)" type="number" value={form.amount} onChange={update('amount')} placeholder="2000" required />
+      <Input label="UTR / Reference No. (min 8 digits)" value={form.utr} onChange={update('utr')} placeholder="123456789012" required />
       <label className="mb-4 block text-sm text-slate-700">
-        <span className="mb-1 block">Screenshot upload</span>
+        <span className="mb-1 block">
+          Screenshot upload
+          <span className="ml-1 text-rose-500">*</span>
+        </span>
         <input
           type="file"
           accept="image/*"
@@ -199,7 +209,14 @@ function LoginBox({ onSuccess }) {
       <Button
         className="w-full"
         onClick={() => {
-          if (password === appConfig.adminPassword) {
+          const expectedPassword = appConfig.adminPassword;
+          if (!expectedPassword) {
+            setError(true);
+            notify?.('Admin password is not configured.');
+            return;
+          }
+
+          if (password === expectedPassword) {
             onSuccess();
           } else {
             setError(true);
@@ -233,6 +250,18 @@ function App() {
   const [receiptModal, setReceiptModal] = useState(null);
   const [toast, setToast] = useState('');
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState(() => {
+    const savedTheme = localStorage.getItem('sbs-theme');
+    return savedTheme || 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.remove('theme-dark', 'theme-light');
+    document.documentElement.classList.add(theme === 'dark' ? 'theme-dark' : 'theme-light');
+    localStorage.setItem('sbs-theme', theme);
+  }, [theme]);
+
+  const isDark = theme === 'dark';
 
   useEffect(() => {
     let mounted = true;
@@ -295,320 +324,324 @@ function App() {
   ), []);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800">
-      <header className="bg-gradient-to-br from-orange-600 via-orange-600 to-rose-600 text-white">
-        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.25em] text-orange-100">Community event & fund portal</p>
-              <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{appConfig.apartmentName}</h1>
+    <div className={`min-h-screen ${isDark ? 'theme-dark' : 'theme-light'}`}>
+      <div className={`min-h-screen ${isDark ? 'bg-[#070b16] text-slate-100' : 'bg-[#f3f6fb] text-slate-800'}`}>
+        <header className="bg-gradient-to-br from-orange-600 via-rose-500 to-fuchsia-600 text-white shadow-[0_18px_45px_rgba(249,115,22,0.25)]">
+          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.25em] text-orange-100">Community event & fund portal</p>
+                <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{appConfig.apartmentName}</h1>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/15"
+                >
+                  {isDark ? <SunMedium size={16} /> : <MoonStar size={16} />}
+                  {isDark ? 'Light mode' : 'Dark mode'}
+                </button>
+
+                <button
+                  type="button"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/15 sm:w-auto"
+                  onClick={() => setShowAdmin(true)}
+                >
+                  {adminReady ? <ShieldCheck size={16} /> : <Lock size={16} />}
+                  {adminReady ? 'Organizer' : 'Organizer login'}
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/15 sm:w-auto"
-              onClick={() => setShowAdmin(true)}
-            >
-              {adminReady ? <ShieldCheck size={16} /> : <Lock size={16} />}
-              {adminReady ? 'Organizer' : 'Organizer login'}
-            </button>
           </div>
+        </header>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {renderStatCard('Funds raised', INR(raised), <TrendingUp size={14} />, 'text-emerald-200')}
-            {renderStatCard('Total spent', INR(spent), <Wallet size={14} />, 'text-white')}
-            {renderStatCard(netBalance >= 0 ? 'Surplus' : 'Deficit', INR(Math.abs(netBalance)), <IndianRupee size={14} />, netBalance >= 0 ? 'text-emerald-200' : 'text-amber-200')}
-            {renderStatCard('Reserve fund', INR(data.reserveFund), <PiggyBank size={14} />, 'text-sky-200')}
-          </div>
-        </div>
-      </header>
+        <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Live</span>
+                <h2 className="mt-2 text-2xl font-bold text-slate-800">{data.activeEvent ? data.activeEvent.name : 'No active event'}</h2>
+                {data.activeEvent && <p className="mt-1 text-sm text-slate-500">{fmtDate(data.activeEvent.startDate)} - {fmtDate(data.activeEvent.endDate)}</p>}
+              </div>
 
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Live</span>
-              <h2 className="mt-2 text-2xl font-bold text-slate-800">{data.activeEvent ? data.activeEvent.name : 'No active event'}</h2>
-              {data.activeEvent && <p className="mt-1 text-sm text-slate-500">{fmtDate(data.activeEvent.startDate)} - {fmtDate(data.activeEvent.endDate)}</p>}
+              {data.activeEvent && (
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => setShowUPI(true)}>
+                    <QrCode size={16} /> Contribute via UPI
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowProof(true)}>
+                    <Upload size={16} /> Submit proof
+                  </Button>
+                </div>
+              )}
             </div>
 
             {data.activeEvent && (
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setShowUPI(true)}>
-                  <QrCode size={16} /> Contribute via UPI
-                </Button>
-                <Button variant="outline" onClick={() => setShowProof(true)}>
-                  <Upload size={16} /> Submit proof
-                </Button>
+              <div className="mt-6">
+                <div className="mb-2 flex items-center justify-between text-sm text-slate-600">
+                  <span>
+                    {INR(raised)} <span className="text-slate-400">/ {INR(data.activeEvent.target)}</span>
+                  </span>
+                  <span className="font-semibold text-orange-600">{progressPercentage}%</span>
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-orange-500 to-rose-500 transition-all duration-700"
+                    style={{ width: `${progressPercentage}%` }}
+                  />
+                </div>
               </div>
             )}
-          </div>
-
-          {data.activeEvent && (
-            <div className="mt-6">
-              <div className="mb-2 flex items-center justify-between text-sm text-slate-600">
-                <span>
-                  {INR(raised)} <span className="text-slate-400">/ {INR(data.activeEvent.target)}</span>
-                </span>
-                <span className="font-semibold text-orange-600">{progressPercentage}%</span>
-              </div>
-              <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-orange-500 to-rose-500 transition-all duration-700"
-                  style={{ width: `${progressPercentage}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </section>
-
-        {loading && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-soft">
-            Loading portal data…
           </section>
-        )}
 
-        {!loading && (
-          <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
-            <div className="flex border-b border-slate-200 text-sm font-medium">
-              { [
-                ['income', 'Income'],
-                ['expenses', 'Expenses & bills'],
-                ['history', 'History & reserve'],
-              ].map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`flex-1 px-4 py-3 ${tab === key ? 'border-b-2 border-orange-600 text-orange-600' : 'text-slate-500'}`}
-                  onClick={() => setTab(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+          {loading && (
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-soft">
+              Loading portal data…
+            </section>
+          )}
 
-            <div className="p-4 sm:p-5">
-              {tab === 'income' && (
-                <>
-                  <div className="relative mb-4">
-                    <Search size={16} className="absolute left-3 top-3.5 text-slate-400" />
-                    <input
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Search flat no. or resident name"
-                      className="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
-                    />
-                  </div>
+          {!loading && (
+            <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
+              <div className="flex border-b border-slate-200 text-sm font-medium">
+                { [
+                  ['income', 'Income'],
+                  ['expenses', 'Expenses & bills'],
+                  ['history', 'History & reserve'],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`flex-1 px-4 py-3 ${tab === key ? 'border-b-2 border-orange-600 text-orange-600' : 'text-slate-500'}`}
+                    onClick={() => setTab(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-slate-500">
-                          <th className="pb-2 pr-4 font-medium">Flat</th>
-                          <th className="pb-2 pr-4 font-medium">Resident</th>
-                          <th className="pb-2 pr-4 text-right font-medium">Amount</th>
-                          <th className="pb-2 pr-4 font-medium">Mode</th>
-                          <th className="pb-2 pr-4 font-medium">Status</th>
-                          <th className="pb-2 font-medium">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredDonations.map((donation) => (
-                          <tr key={donation.id} className="border-b border-slate-100 align-middle">
-                            <td className="py-3 pr-4 font-medium text-slate-800">{donation.flat}</td>
-                            <td className="py-3 pr-4 text-slate-700">{donation.residentName || 'Anonymous'}</td>
-                            <td className="py-3 pr-4 text-right font-semibold text-slate-800">{INR(donation.amount)}</td>
-                            <td className="py-3 pr-4 text-slate-600">{donation.mode}</td>
-                            <td className="py-3 pr-4"><Badge status={donation.status} /></td>
-                            <td className="py-3 text-slate-500">{fmtDate(donation.date)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {!filteredDonations.length && (
-                    <div className="rounded-2xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">No donations match this search.</div>
-                  )}
-                </>
-              )}
-
-              {tab === 'expenses' && (
-                <div className="space-y-3">
-                  {data.expenses.map((expense) => (
-                    <div key={expense.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <span className="inline-flex rounded-full bg-orange-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-orange-700">
-                          {expense.category}
-                        </span>
-                        <p className="mt-2 font-semibold text-slate-800">{expense.description}</p>
-                        <p className="mt-1 text-xs text-slate-500">{expense.vendor} · {fmtDate(expense.date)}</p>
-                      </div>
-                      <div className="shrink-0 text-left sm:text-right">
-                        <p className="text-lg font-bold text-slate-800">{INR(expense.amount)}</p>
-                        <button
-                          type="button"
-                          onClick={() => setReceiptModal(expense)}
-                          className="mt-1 inline-flex items-center gap-2 text-xs font-medium text-orange-600 hover:text-orange-700"
-                        >
-                          <Receipt size={12} /> View receipt
-                        </button>
-                      </div>
+              <div className="p-4 sm:p-5">
+                {tab === 'income' && (
+                  <>
+                    <div className="relative mb-4">
+                      <Search size={16} className="absolute left-3 top-3.5 text-slate-400" />
+                      <input
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Search flat no. or resident name"
+                        className="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-800 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                      />
                     </div>
-                  ))}
-                </div>
-              )}
 
-              {tab === 'history' && (
-                <div className="space-y-3">
-                  {data.history.map((entry) => {
-                    const diff = entry.raised - entry.spent;
-                    return (
-                      <div key={entry.id} className="rounded-2xl border border-slate-200 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <h3 className="font-semibold text-slate-800">{entry.name}</h3>
-                          <span className="text-xs text-slate-500">{fmtDate(entry.date)}</span>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-slate-500">
+                            <th className="pb-2 pr-4 font-medium">Flat</th>
+                            <th className="pb-2 pr-4 font-medium">Resident</th>
+                            <th className="pb-2 pr-4 text-right font-medium">Amount</th>
+                            <th className="pb-2 pr-4 font-medium">Mode</th>
+                            <th className="pb-2 pr-4 font-medium">Status</th>
+                            <th className="pb-2 font-medium">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredDonations.map((donation) => (
+                            <tr key={donation.id} className="border-b border-slate-100 align-middle">
+                              <td className="py-3 pr-4 font-medium text-slate-800">{donation.flat}</td>
+                              <td className="py-3 pr-4 text-slate-700">{donation.residentName || 'Anonymous'}</td>
+                              <td className="py-3 pr-4 text-right font-semibold text-slate-800">{INR(donation.amount)}</td>
+                              <td className="py-3 pr-4 text-slate-600">{donation.mode}</td>
+                              <td className="py-3 pr-4"><Badge status={donation.status} /></td>
+                              <td className="py-3 text-slate-500">{fmtDate(donation.date)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {!filteredDonations.length && (
+                      <div className="rounded-2xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">No donations match this search.</div>
+                    )}
+                  </>
+                )}
+
+                {tab === 'expenses' && (
+                  <div className="space-y-3">
+                    {data.expenses.map((expense) => (
+                      <div key={expense.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <span className="inline-flex rounded-full bg-orange-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-orange-700">
+                            {expense.category}
+                          </span>
+                          <p className="mt-2 font-semibold text-slate-800">{expense.description}</p>
+                          <p className="mt-1 text-xs text-slate-500">{expense.vendor} · {fmtDate(expense.date)}</p>
                         </div>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                          <div>
-                            <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Budget</p>
-                            <p className="mt-1 font-semibold text-slate-800">{INR(entry.target)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Raised</p>
-                            <p className="mt-1 font-semibold text-slate-800">{INR(entry.raised)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Spent</p>
-                            <p className="mt-1 font-semibold text-slate-800">{INR(entry.spent)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">{diff >= 0 ? 'Surplus' : 'Deficit'}</p>
-                            <p className={`mt-1 font-semibold ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                              {diff >= 0 ? '+' : '-'}{INR(Math.abs(diff))}
-                            </p>
-                          </div>
+                        <div className="shrink-0 text-left sm:text-right">
+                          <p className="text-lg font-bold text-slate-800">{INR(expense.amount)}</p>
+                          <button
+                            type="button"
+                            onClick={() => setReceiptModal(expense)}
+                            className="mt-1 inline-flex items-center gap-2 text-xs font-medium text-orange-600 hover:text-orange-700"
+                          >
+                            <Receipt size={12} /> View receipt
+                          </button>
                         </div>
                       </div>
-                    );
-                  })}
-                  <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                    <span className="font-semibold text-slate-800">Reserve fund:</span> {INR(data.reserveFund)} carried forward for future community events.
+                    ))}
                   </div>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-      </main>
+                )}
 
-      {showUPI && (
-        <Modal title="Contribute via UPI" onClose={() => setShowUPI(false)}>
-          <div className="flex flex-col items-center">
-            <FakeQR />
-            <p className="mt-3 text-xs text-slate-500">Placeholder QR code — replace with your real one</p>
-            <div className="mt-4 flex w-full items-center justify-between rounded-xl bg-slate-100 px-3 py-2 text-sm">
-              <code className="break-all text-slate-700">{UPI_ID}</code>
-              <button
-                type="button"
-                className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:bg-slate-50"
-                onClick={() => {
-                  navigator.clipboard?.writeText(UPI_ID);
-                  notify('UPI ID copied');
-                }}
-              >
-                <Copy size={16} />
-              </button>
-            </div>
-          </div>
-
-          <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-slate-600">
-            <li>Pay using the UPI ID or QR code.</li>
-            <li>Save your UTR / reference number.</li>
-            <li>Submit proof of payment from this page.</li>
-            <li>Once verified, the amount appears in the public ledger.</li>
-          </ol>
-
-          <Button className="mt-5 w-full" onClick={() => {
-            setShowUPI(false);
-            setShowProof(true);
-          }}>
-            <ArrowUpRight size={16} /> I have paid — submit proof
-          </Button>
-        </Modal>
-      )}
-
-      {showProof && (
-        <ProofForm
-          onClose={() => setShowProof(false)}
-          onSubmit={async (payload) => {
-            const active = data.activeEvent;
-            const pendingEntry = {
-              id: uid(),
-              flat: payload.flat,
-              residentName: payload.name,
-              amount: Number(payload.amount),
-              paymentMode: 'UPI',
-              referenceNo: payload.utr,
-              screenshotUrl: payload.screenshotUrl || '',
-              status: 'Pending',
-              submittedAt: today(),
-            };
-
-            setData((previous) => ({
-              ...previous,
-              pendingPayments: [...previous.pendingPayments, pendingEntry],
-            }));
-
-            if (active) {
-              try {
-                const result = await submitPaymentProof(payload, active.id);
-                if (result.ok) {
-                  notify('Payment proof submitted for verification');
-                } else {
-                  console.error('Supabase submitPaymentProof failed:', result.error);
-                  notify('Saved locally; Supabase rejected the insert. Check RLS or schema.');
-                }
-              } catch (error) {
-                console.error('submitPaymentProof threw:', error);
-                notify('Saved locally; API request failed.');
-              }
-            } else {
-              notify('No active event found. Submission saved locally for review.');
-            }
-
-            setShowProof(false);
-          }}
-        />
-      )}
-
-      {showAdmin && (
-        <Modal title="Organizer panel" wide onClose={() => setShowAdmin(false)}>
-          {!adminReady ? (
-            <LoginBox onSuccess={() => setAdminReady(true)} />
-          ) : (
-            <AdminPanel
-              data={data}
-              setData={setData}
-              onClose={() => setShowAdmin(false)}
-              onLogout={() => {
-                setAdminReady(false);
-                setShowAdmin(false);
-              }}
-              notify={notify}
-            />
+                {tab === 'history' && (
+                  <div className="space-y-3">
+                    {data.history.map((entry) => {
+                      const diff = entry.raised - entry.spent;
+                      return (
+                        <div key={entry.id} className="rounded-2xl border border-slate-200 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="font-semibold text-slate-800">{entry.name}</h3>
+                            <span className="text-xs text-slate-500">{fmtDate(entry.date)}</span>
+                          </div>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Budget</p>
+                              <p className="mt-1 font-semibold text-slate-800">{INR(entry.target)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Raised</p>
+                              <p className="mt-1 font-semibold text-slate-800">{INR(entry.raised)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Spent</p>
+                              <p className="mt-1 font-semibold text-slate-800">{INR(entry.spent)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">{diff >= 0 ? 'Surplus' : 'Deficit'}</p>
+                              <p className={`mt-1 font-semibold ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {diff >= 0 ? '+' : '-'}{INR(Math.abs(diff))}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                      <span className="font-semibold text-slate-800">Reserve fund:</span> {INR(data.reserveFund)} carried forward for future community events.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
           )}
-        </Modal>
-      )}
+        </main>
 
-      {receiptModal && (
-        <Modal title={`${receiptModal.category} • ${INR(receiptModal.amount)}`} onClose={() => setReceiptModal(null)}>
-          {(() => {
-            const receiptUrl = receiptModal.receipt || receiptModal.receipt_url || receiptModal.receipt_path || '';
-            return receiptUrl ? (
+        {showUPI && (
+          <Modal title="Contribute via UPI" onClose={() => setShowUPI(false)}>
+            <div className="flex flex-col items-center">
+              <FakeQR />
+              <p className="mt-3 text-xs text-slate-500">Placeholder QR code — replace with your real one</p>
+              <div className="mt-4 flex w-full items-center justify-between rounded-xl bg-slate-100 px-3 py-2 text-sm">
+                <code className="break-all text-slate-700">{UPI_ID}</code>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:bg-slate-50"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(UPI_ID);
+                    notify('UPI ID copied');
+                  }}
+                >
+                  <Copy size={16} />
+                </button>
+              </div>
+            </div>
+
+            <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-slate-600">
+              <li>Pay using the UPI ID or QR code.</li>
+              <li>Save your UTR / reference number.</li>
+              <li>Submit proof of payment from this page.</li>
+              <li>Once verified, the amount appears in the public ledger.</li>
+            </ol>
+
+            <Button className="mt-5 w-full" onClick={() => {
+              setShowUPI(false);
+              setShowProof(true);
+            }}>
+              <ArrowUpRight size={16} /> I have paid — submit proof
+            </Button>
+          </Modal>
+        )}
+
+        {showProof && (
+          <ProofForm
+            onClose={() => setShowProof(false)}
+            onSubmit={async (payload) => {
+              const active = data.activeEvent;
+              const pendingEntry = {
+                id: uid(),
+                flat: payload.flat,
+                residentName: payload.name,
+                amount: Number(payload.amount),
+                paymentMode: 'UPI',
+                referenceNo: payload.utr,
+                screenshotUrl: payload.screenshotUrl || '',
+                status: 'Pending',
+                submittedAt: today(),
+              };
+
+              setData((previous) => ({
+                ...previous,
+                pendingPayments: [...previous.pendingPayments, pendingEntry],
+              }));
+
+              if (active) {
+                try {
+                  const result = await submitPaymentProof(payload, active.id);
+                  if (result.ok) {
+                    notify('Payment proof submitted for verification');
+                  } else {
+                    console.error('Supabase submitPaymentProof failed:', result.error);
+                    notify('Saved locally; Supabase rejected the insert. Check RLS or schema.');
+                  }
+                } catch (error) {
+                  console.error('submitPaymentProof threw:', error);
+                  notify('Saved locally; API request failed.');
+                }
+              } else {
+                notify('No active event found. Submission saved locally for review.');
+              }
+
+              setShowProof(false);
+            }}
+          />
+        )}
+
+        {showAdmin && (
+          <Modal title="Organizer panel" wide onClose={() => setShowAdmin(false)}>
+            {!adminReady ? (
+              <LoginBox onSuccess={() => setAdminReady(true)} />
+            ) : (
+              <AdminPanel
+                data={data}
+                setData={setData}
+                onClose={() => setShowAdmin(false)}
+                onLogout={() => {
+                  setAdminReady(false);
+                  setShowAdmin(false);
+                }}
+                notify={notify}
+              />
+            )}
+          </Modal>
+        )}
+
+        {receiptModal && (
+          <Modal title="Expense receipt" onClose={() => setReceiptModal(null)}>
+            {receiptModal.receipt ? (
               <>
                 <img
-                  src={receiptUrl}
-                  alt="Receipt"
+                  src={receiptModal.receipt}
+                  alt="Expense receipt"
                   onError={(event) => {
                     event.currentTarget.style.display = 'none';
                     const fallback = event.currentTarget.nextSibling;
@@ -624,16 +657,16 @@ function App() {
               <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
                 No receipt image available.
               </div>
-            );
-          })()}
-        </Modal>
-      )}
+            )}
+          </Modal>
+        )}
 
-      {toast && (
-        <div className="fixed bottom-5 left-1/2 z-[80] -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
-          {toast}
-        </div>
-      )}
+        {toast && (
+          <div className="fixed bottom-5 left-1/2 z-[80] -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
+            {toast}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
