@@ -753,10 +753,11 @@ function App() {
                     alt="Expense receipt"
                     onError={(event) => {
                       event.currentTarget.style.display = 'none';
-                      const fallback = event.currentTarget.nextSibling;
+                      const fallback = event.currentTarget.nextElementSibling;
                       if (fallback) fallback.style.display = 'flex';
                     }}
-                    className="mx-auto max-h-[70vh] max-w-full rounded-2xl border border-slate-200 object-contain"
+                    className="mx-auto max-h-[70vh] max-w-full rounded-2xl border border-slate-200"
+                    style={{ width: 'auto', height: 'auto', display: 'block' }}
                   />
                   <div className="hidden min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
                     No receipt image available.
