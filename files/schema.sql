@@ -124,12 +124,15 @@ create policy "anon insert pending" on pending_payments for insert with check (t
 create policy "anon update pending" on pending_payments for update using (true) with check (true);
 create policy "anon write reserve" on reserve_fund for insert with check (true);
 
-insert into storage.buckets (id, name, public) values ('receipts','receipts',true), ('proofs','proofs',false) on conflict do nothing;
+insert into storage.buckets (id, name, public) values ('receipts','receipts',true), ('proofs','proofs',true) on conflict do nothing;
 
 create policy "public read receipts" on storage.objects for select using (bucket_id='receipts');
 create policy "public read proofs" on storage.objects for select using (bucket_id='proofs');
-create policy "org upload receipts" on storage.objects for insert with check (bucket_id='receipts' and is_organizer());
-create policy "anyone upload proofs" on storage.objects for insert with check (bucket_id='proofs');
-create policy "org read proofs" on storage.objects for select using (bucket_id='proofs' and is_organizer());
+create policy "public upload receipts" on storage.objects for insert with check (bucket_id='receipts');
+create policy "public upload proofs" on storage.objects for insert with check (bucket_id='proofs');
+create policy "public update receipts" on storage.objects for update using (bucket_id='receipts') with check (bucket_id='receipts');
+create policy "public update proofs" on storage.objects for update using (bucket_id='proofs') with check (bucket_id='proofs');
+create policy "public delete receipts" on storage.objects for delete using (bucket_id='receipts');
+create policy "public delete proofs" on storage.objects for delete using (bucket_id='proofs');
 
 insert into reserve_fund(delta, note) values (18500, 'Opening balance');

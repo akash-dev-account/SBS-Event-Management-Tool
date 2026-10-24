@@ -105,9 +105,10 @@ async function uploadImageToStorage(value, bucketName) {
 
     const extension = mimeType.includes('png') ? 'png' : mimeType.includes('jpg') || mimeType.includes('jpeg') ? 'jpg' : 'webp';
     const actualBucket = bucketName === 'payment-proofs' ? 'proofs' : bucketName === 'expense-receipts' ? 'receipts' : bucketName;
-    const fileName = `${actualBucket}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeFileName('upload')}.${extension}`;
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeFileName('upload')}.${extension}`;
+    const file = new Blob([bytes], { type: mimeType });
 
-    const { error } = await supabase.storage.from(actualBucket).upload(fileName, bytes, {
+    const { error } = await supabase.storage.from(actualBucket).upload(fileName, file, {
       cacheControl: '3600',
       upsert: false,
       contentType: mimeType,
@@ -115,8 +116,17 @@ async function uploadImageToStorage(value, bucketName) {
 
     if (error) throw error;
 
-    const { data } = supabase.storage.from(actualBucket).getPublicUrl(fileName);
-    return data?.publicUrl || value;
+    const { data: publicData } = supabase.storage.from(actualBucket).getPublicUrl(fileName);
+    if (publicData?.publicUrl) {
+      return publicData.publicUrl;
+    }
+
+    const { data: signedData, error: signedError } = await supabase.storage.from(actualBucket).createSignedUrl(fileName, 60 * 60);
+    if (!signedError && signedData?.signedUrl) {
+      return signedData.signedUrl;
+    }
+
+    return value;
   } catch (error) {
     console.warn(`Upload to ${bucketName} failed, falling back to data URL:`, error);
     return value;

@@ -135,19 +135,41 @@ function ProofForm({ onClose, onSubmit }) {
   const [form, setForm] = useState({ flat: '', name: '', amount: '', utr: '' });
   const [screenshot, setScreenshot] = useState('');
 
-  const flatValid = String(form.flat).trim().length > 0;
+  const normalizeFlatCode = (value) => {
+    const cleaned = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    if (!cleaned) return '';
+
+    if (/^[A-Z]+-\d+$/.test(cleaned)) return cleaned;
+    if (/^[A-Z]+\d+$/.test(cleaned)) {
+      const match = cleaned.match(/^([A-Z]+)(\d+)$/);
+      return match ? `${match[1]}-${match[2]}` : cleaned;
+    }
+
+    return cleaned;
+  };
+
+  const flatValue = normalizeFlatCode(form.flat);
+  const flatValid = /^[A-Z]+-\d+$/.test(flatValue);
   const nameValid = String(form.name).trim().length > 0;
   const amountValid = Number(form.amount) > 0;
   const utrValid = String(form.utr).trim().length >= 8;
   const screenshotValid = Boolean(screenshot && screenshot.trim().length > 0);
   const valid = flatValid && nameValid && amountValid && utrValid && screenshotValid;
 
-  const update = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  const update = (key) => (event) => {
+    if (key === 'flat') {
+      const nextValue = normalizeFlatCode(event.target.value);
+      setForm((prev) => ({ ...prev, [key]: nextValue }));
+      return;
+    }
+
+    setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  };
 
   const handleSubmit = () => {
     if (!valid || typeof onSubmit !== 'function') return;
     onSubmit({
-      flat: String(form.flat).trim(),
+      flat: flatValue,
       name: String(form.name).trim(),
       amount: Number(form.amount),
       utr: String(form.utr).trim(),
@@ -157,7 +179,16 @@ function ProofForm({ onClose, onSubmit }) {
 
   return (
     <Modal title="Submit payment proof" onClose={onClose}>
-      <Input label="Flat No." value={form.flat} onChange={update('flat')} placeholder="A-101" required />
+      <Input
+        label="Flat No."
+        value={form.flat}
+        onChange={update('flat')}
+        placeholder="F-115"
+        required
+      />
+      {form.flat && !flatValid && (
+        <p className="-mt-2 mb-3 text-xs text-rose-600">Use format like F-115</p>
+      )}
       <Input label="Resident Name" value={form.name} onChange={update('name')} placeholder="Your name" required />
       <Input label="Amount (₹)" type="number" value={form.amount} onChange={update('amount')} placeholder="2000" required />
       <Input label="UTR / Reference No. (min 8 digits)" value={form.utr} onChange={update('utr')} placeholder="123456789012" required />
