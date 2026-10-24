@@ -43,6 +43,7 @@ create table expenses (
   vendor text,
   amount numeric(12,2) not null check (amount > 0),
   receipt_path text,
+  receipt_url text,
   spent_on date not null default current_date,
   created_at timestamptz default now()
 );
@@ -54,8 +55,11 @@ create table pending_payments (
   resident_name text not null,
   amount numeric(12,2) not null check (amount > 0),
   utr text not null,
+  reference_no text,
   screenshot_path text,
+  screenshot_url text,
   status pay_status not null default 'Pending',
+  is_verified boolean not null default false,
   submitted_at timestamptz default now()
 );
 
@@ -121,6 +125,9 @@ create policy "anon update pending" on pending_payments for update using (true) 
 create policy "anon write reserve" on reserve_fund for insert with check (true);
 
 insert into storage.buckets (id, name, public) values ('receipts','receipts',true), ('proofs','proofs',false) on conflict do nothing;
+
+create policy "public read receipts" on storage.objects for select using (bucket_id='receipts');
+create policy "public read proofs" on storage.objects for select using (bucket_id='proofs');
 create policy "org upload receipts" on storage.objects for insert with check (bucket_id='receipts' and is_organizer());
 create policy "anyone upload proofs" on storage.objects for insert with check (bucket_id='proofs');
 create policy "org read proofs" on storage.objects for select using (bucket_id='proofs' and is_organizer());

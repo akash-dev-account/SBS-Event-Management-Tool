@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpRight,
   Check,
@@ -126,15 +126,22 @@ function ProofForm({ onClose, onSubmit }) {
   const [form, setForm] = useState({ flat: '', name: '', amount: '', utr: '' });
   const [screenshot, setScreenshot] = useState('');
 
-  const valid = form.flat && form.name && Number(form.amount) > 0 && form.utr.trim().length >= 8;
+  const flatValid = String(form.flat).trim().length > 0;
+  const nameValid = String(form.name).trim().length > 0;
+  const amountValid = Number(form.amount) > 0;
+  const utrValid = String(form.utr).trim().length >= 8;
+  const screenshotValid = Boolean(screenshot && screenshot.trim().length > 0);
+  const valid = flatValid && nameValid && amountValid && utrValid && screenshotValid;
 
   const update = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
   const handleSubmit = () => {
     if (!valid || typeof onSubmit !== 'function') return;
     onSubmit({
-      ...form,
+      flat: String(form.flat).trim(),
+      name: String(form.name).trim(),
       amount: Number(form.amount),
+      utr: String(form.utr).trim(),
       screenshotUrl: screenshot,
     });
   };
@@ -144,7 +151,7 @@ function ProofForm({ onClose, onSubmit }) {
       <Input label="Flat No." value={form.flat} onChange={update('flat')} placeholder="A-101" />
       <Input label="Resident Name" value={form.name} onChange={update('name')} placeholder="Your name" />
       <Input label="Amount (₹)" type="number" value={form.amount} onChange={update('amount')} placeholder="2000" />
-      <Input label="UTR / Reference No." value={form.utr} onChange={update('utr')} placeholder="123456789012" />
+      <Input label="UTR / Reference No. (min 8 digits)" value={form.utr} onChange={update('utr')} placeholder="123456789012" />
       <label className="mb-4 block text-sm text-slate-700">
         <span className="mb-1 block">Screenshot upload</span>
         <input
@@ -201,7 +208,7 @@ function LoginBox({ onSuccess }) {
       >
         <Lock size={16} /> Unlock organizer panel
       </Button>
-      <p className="mt-3 text-xs text-slate-500">Demo password: {appConfig.adminPassword}</p>
+      <p className="mt-3 text-xs text-slate-500">Admin will share the password.</p>
     </div>
   );
 }
@@ -250,17 +257,34 @@ function App() {
     window.setTimeout(() => setToast(''), 2500);
   };
 
-  const raised = data.donations.filter((item) => item.status === 'Verified').reduce((sum, item) => sum + Number(item.amount), 0);
-  const spent = data.expenses.reduce((sum, item) => sum + Number(item.amount), 0);
+  const raised = useMemo(
+    () => data.donations.filter((item) => item.status === 'Verified').reduce((sum, item) => sum + Number(item.amount), 0),
+    [data.donations]
+  );
+  const spent = useMemo(
+    () => data.expenses.reduce((sum, item) => sum + Number(item.amount), 0),
+    [data.expenses]
+  );
   const netBalance = raised - spent;
-  const progressPercentage = data.activeEvent ? Math.min(100, Math.round((raised / data.activeEvent.target) * 100)) : 0;
+  const progressPercentage = useMemo(
+    () => (data.activeEvent ? Math.min(100, Math.round((raised / data.activeEvent.target) * 100)) : 0),
+    [data.activeEvent, raised]
+  );
 
-  const filteredDonations = data.donations.filter((item) => {
-    const haystack = `${item.flat} ${item.residentName}`.toLowerCase();
-    return haystack.includes(search.toLowerCase());
-  });
+  const filteredDonations = useMemo(() => {
+    const query = search.toLowerCase();
+    return data.donations.filter((item) => {
+      const haystack = `${item.flat} ${item.residentName}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [data.donations, search]);
 
-  const renderStatCard = (label, value, icon, accent) => (
+  const visiblePendingPayments = useMemo(
+    () => data.pendingPayments.filter((item) => !item.isVerified && item.status !== 'Verified'),
+    [data.pendingPayments]
+  );
+
+  const renderStatCard = useCallback((label, value, icon, accent) => (
     <div key={label} className="rounded-2xl border border-white/20 bg-white/10 p-3 text-white backdrop-blur-sm">
       <div className="mb-1 flex items-center gap-1 text-xs text-orange-100">
         {icon}
@@ -268,20 +292,20 @@ function App() {
       </div>
       <div className={`text-xl font-bold ${accent}`}>{value}</div>
     </div>
-  );
+  ), []);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
       <header className="bg-gradient-to-br from-orange-600 via-orange-600 to-rose-600 text-white">
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-[10px] uppercase tracking-[0.25em] text-orange-100">Community event & fund portal</p>
               <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{appConfig.apartmentName}</h1>
             </div>
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/15"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/15 sm:w-auto"
               onClick={() => setShowAdmin(true)}
             >
               {adminReady ? <ShieldCheck size={16} /> : <Lock size={16} />}
@@ -578,7 +602,30 @@ function App() {
 
       {receiptModal && (
         <Modal title={`${receiptModal.category} • ${INR(receiptModal.amount)}`} onClose={() => setReceiptModal(null)}>
-          <img src={receiptModal.receipt} alt="Receipt" className="max-h-[70vh] w-full rounded-2xl border border-slate-200 object-cover" />
+          {(() => {
+            const receiptUrl = receiptModal.receipt || receiptModal.receipt_url || receiptModal.receipt_path || '';
+            return receiptUrl ? (
+              <>
+                <img
+                  src={receiptUrl}
+                  alt="Receipt"
+                  onError={(event) => {
+                    event.currentTarget.style.display = 'none';
+                    const fallback = event.currentTarget.nextSibling;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                  className="max-h-[70vh] w-full rounded-2xl border border-slate-200 object-cover"
+                />
+                <div className="hidden min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+                  No receipt image available.
+                </div>
+              </>
+            ) : (
+              <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+                No receipt image available.
+              </div>
+            );
+          })()}
         </Modal>
       )}
 
@@ -606,35 +653,40 @@ function AdminPanel({ data, setData, onClose, onLogout, notify }) {
     const result = await approvePaymentRecord(paymentId, shouldVerify);
 
     if (result.ok) {
+      const paymentToMove = data.pendingPayments.find((item) => item.id === paymentId);
+
       setData((previous) => ({
         ...previous,
         pendingPayments: previous.pendingPayments.filter((item) => item.id !== paymentId),
-        donations: shouldVerify
+        donations: shouldVerify && paymentToMove
           ? [
               ...previous.donations,
               {
                 id: uid(),
-                flat: previous.pendingPayments.find((item) => item.id === paymentId)?.flat || 'N/A',
-                residentName: previous.pendingPayments.find((item) => item.id === paymentId)?.residentName || 'Anonymous',
-                amount: previous.pendingPayments.find((item) => item.id === paymentId)?.amount || 0,
-                mode: previous.pendingPayments.find((item) => item.id === paymentId)?.paymentMode || 'UPI',
+                flat: paymentToMove.flat,
+                residentName: paymentToMove.residentName,
+                amount: Number(paymentToMove.amount),
+                mode: paymentToMove.paymentMode || 'UPI',
                 status: 'Verified',
                 date: today(),
               },
             ]
           : previous.donations,
       }));
+
       notify(shouldVerify ? 'Payment verified and added to ledger' : 'Payment rejected');
     } else {
       notify('Verification update failed');
     }
   };
 
+  const visiblePendingPayments = data.pendingPayments.filter((item) => !item.isVerified && item.status !== 'Verified');
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap gap-2">
         { [
-          ['pending', `Pending (${data.pendingPayments.length})`],
+          ['pending', `Pending (${visiblePendingPayments.length})`],
           ['donation', 'Log donation'],
           ['expense', 'Log expense'],
           ['event', 'New event'],
@@ -655,10 +707,10 @@ function AdminPanel({ data, setData, onClose, onLogout, notify }) {
 
       {tab === 'pending' && (
         <div className="space-y-3">
-          {data.pendingPayments.length === 0 ? (
+          {visiblePendingPayments.length === 0 ? (
             <div className="rounded-2xl bg-slate-50 p-6 text-center text-sm text-slate-500">No payment proofs pending.</div>
           ) : (
-            data.pendingPayments.map((payment) => (
+            visiblePendingPayments.map((payment) => (
               <div key={payment.id} className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>

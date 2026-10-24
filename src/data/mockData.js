@@ -1,6 +1,6 @@
 export const appConfig = {
   apartmentName: 'Sri Balaji Serene Apartment',
-  adminPassword: import.meta.env.VITE_APP_ADMIN_PASSWORD || 'balaji123',
+  adminPassword: import.meta.env.VITE_APP_ADMIN_PASSWORD || '',
 };
 
 export const UPI_ID = 'sribalajiserene@okhdfcbank';

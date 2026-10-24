@@ -21,7 +21,7 @@ const normalizeExpense = (row) => ({
   vendor: row.vendor ?? 'N/A',
   amount: Number(row.amount ?? 0),
   date: row.date ?? row.spent_on ?? row.created_at?.slice(0, 10) ?? today(),
-  receipt: row.receipt ?? row.receipt_url ?? row.receipt_path ?? row.receiptUrl ?? 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80',
+  receipt: row.receipt ?? row.receipt_url ?? row.receipt_path ?? row.receiptUrl ?? '',
 });
 
 const normalizePending = (row) => ({
@@ -31,8 +31,9 @@ const normalizePending = (row) => ({
   amount: Number(row.amount ?? 0),
   paymentMode: row.payment_mode ?? row.mode ?? 'UPI',
   referenceNo: row.reference_no ?? row.utr ?? 'N/A',
-  screenshotUrl: row.screenshot_url ?? row.screenshotPath ?? row.screenshot_path ?? row.screenshotUrl ?? '',
+  screenshotUrl: row.screenshot_url ?? row.screenshot_path ?? row.screenshotPath ?? row.screenshotUrl ?? '',
   status: row.status ?? 'Pending',
+  isVerified: Boolean(row.is_verified ?? (row.status === 'Verified')),
   submittedAt: row.submitted_at ?? row.created_at?.slice(0, 10) ?? today(),
 });
 
@@ -62,9 +63,63 @@ const findPendingPaymentById = async (paymentId) => {
   return data;
 };
 
+const isDataUrl = (value) => typeof value === 'string' && value.startsWith('data:image/');
+const isHttpUrl = (value) => typeof value === 'string' && /^https?:\/\//i.test(value);
+
+async function uploadImageToStorage(value, bucketName) {
+  if (!supabase || !value || (!isDataUrl(value) && !isHttpUrl(value))) {
+    return value || '';
+  }
+
+  if (isHttpUrl(value)) {
+    return value;
+  }
+
+  try {
+    const match = value.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!match) return value;
+
+    const mimeType = match[1];
+    const base64Data = match[2];
+    const binary = atob(base64Data);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+
+    const extension = mimeType.includes('png') ? 'png' : mimeType.includes('jpg') || mimeType.includes('jpeg') ? 'jpg' : 'webp';
+    const actualBucket = bucketName === 'payment-proofs' ? 'proofs' : bucketName === 'expense-receipts' ? 'receipts' : bucketName;
+    const fileName = `${actualBucket}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
+
+    const { error } = await supabase.storage.from(actualBucket).upload(fileName, bytes, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: mimeType,
+    });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from(actualBucket).getPublicUrl(fileName);
+    return data?.publicUrl || value;
+  } catch (error) {
+    console.warn(`Upload to ${bucketName} failed, falling back to data URL:`, error);
+    return value;
+  }
+}
+
 export async function fetchPortalData() {
+  const emptyPortalData = {
+    reserveFund: 0,
+    activeEvent: null,
+    donations: [],
+    expenses: [],
+    pendingPayments: [],
+    history: [],
+  };
+
   if (!hasSupabase || !supabase) {
-    return mockData;
+    return emptyPortalData;
   }
 
   try {
@@ -91,6 +146,7 @@ export async function fetchPortalData() {
       supabase
         .from('pending_payments')
         .select('*')
+        .or('status.eq.Pending,is_verified.eq.false')
         .order('submitted_at', { ascending: false }),
       supabase
         .from('reserve_fund')
@@ -138,8 +194,8 @@ export async function fetchPortalData() {
       history,
     };
   } catch (error) {
-    console.error('Supabase load failed, falling back to mock data:', error);
-    return mockData;
+    console.error('Supabase load failed; showing empty data state:', error);
+    return emptyPortalData;
   }
 }
 
@@ -149,14 +205,20 @@ export async function submitPaymentProof(payload, eventId) {
   }
 
   try {
+    const screenshotUrl = await uploadImageToStorage(payload.screenshotUrl || payload.screenshot_path || '', 'payment-proofs');
+
     const insertPayload = {
       event_id: eventId,
       flat_no: payload.flat,
       resident_name: payload.name,
       amount: Number(payload.amount),
+      payment_mode: 'UPI',
       utr: payload.utr,
-      screenshot_path: payload.screenshotUrl || '',
+      reference_no: payload.utr,
+      screenshot_path: screenshotUrl,
       status: 'Pending',
+      is_verified: false,
+      submitted_at: today(),
     };
 
     const { error } = await supabase.from('pending_payments').insert([insertPayload]);
@@ -225,6 +287,8 @@ export async function createExpenseRecord(expensePayload) {
   }
 
   try {
+    const receiptUrl = await uploadImageToStorage(expensePayload.receipt || '', 'expense-receipts');
+
     const { error } = await supabase.from('expenses').insert([
       {
         event_id: expensePayload.eventId,
@@ -232,7 +296,7 @@ export async function createExpenseRecord(expensePayload) {
         description: expensePayload.description,
         vendor: expensePayload.vendor || 'N/A',
         amount: Number(expensePayload.amount),
-        receipt_path: expensePayload.receipt || '',
+        receipt_path: receiptUrl,
         spent_on: today(),
       },
     ]);
@@ -251,30 +315,32 @@ export async function approvePaymentRecord(paymentId, shouldVerify) {
   }
 
   try {
-    if (shouldVerify) {
-      const paymentToVerify = await findPendingPaymentById(paymentId);
-      if (paymentToVerify) {
-        const { error: donationError } = await supabase.from('donations').insert([
-          {
-            event_id: paymentToVerify.event_id,
-            flat_no: paymentToVerify.flat_no,
-            resident_name: paymentToVerify.resident_name,
-            amount: Number(paymentToVerify.amount),
-            mode: 'UPI',
-            status: 'Verified',
-            utr: paymentToVerify.utr,
-            donated_on: today(),
-          },
-        ]);
+    const paymentToVerify = await findPendingPaymentById(paymentId);
 
-        if (donationError) throw donationError;
-      }
+    if (shouldVerify && paymentToVerify) {
+      const { error: donationError } = await supabase.from('donations').insert([
+        {
+          event_id: paymentToVerify.event_id,
+          flat_no: paymentToVerify.flat_no,
+          resident_name: paymentToVerify.resident_name,
+          amount: Number(paymentToVerify.amount),
+          mode: 'UPI',
+          status: 'Verified',
+          utr: paymentToVerify.utr ?? paymentToVerify.reference_no ?? '',
+          donated_on: today(),
+        },
+      ]);
+
+      if (donationError) throw donationError;
     }
 
     const { error } = await supabase
       .from('pending_payments')
-      .update({ status: shouldVerify ? 'Verified' : 'Rejected' })
-      .or(`id.eq.${paymentId},id.eq."${paymentId}"`);
+      .update({
+        status: shouldVerify ? 'Verified' : 'Rejected',
+        is_verified: shouldVerify ? true : false,
+      })
+      .eq('id', paymentId);
 
     if (error) throw error;
     return { ok: true };
