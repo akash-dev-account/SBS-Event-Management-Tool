@@ -28,3 +28,6 @@ coverage/
 
 # OS files
 Thumbs.db
+
+# dependency lockfiles
+package-lock.json

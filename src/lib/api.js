@@ -15,18 +15,22 @@ const normalizeDonation = (row) => ({
   date: sanitizeText(row.date ?? row.donated_on ?? row.created_at?.slice(0, 10) ?? today(), today()),
 });
 
-const normalizeExpense = (row) => ({
-  id: row.id,
-  category: sanitizeText(row.category ?? 'Miscellaneous', 'Miscellaneous'),
-  description: sanitizeText(row.description ?? row.desc ?? 'Expense', 'Expense'),
-  vendor: sanitizeText(row.vendor ?? 'N/A', 'N/A'),
-  amount: sanitizeNumber(row.amount ?? 0, 0),
-  date: sanitizeText(row.date ?? row.spent_on ?? row.created_at?.slice(0, 10) ?? today(), today()),
-  receipt: isSafeHttpUrl(row.receipt ?? row.receipt_url ?? row.receipt_path ?? row.receiptUrl ?? '')
-    || isValidImageDataUrl(row.receipt ?? row.receipt_url ?? row.receipt_path ?? row.receiptUrl ?? '')
-    ? row.receipt ?? row.receipt_url ?? row.receipt_path ?? row.receiptUrl ?? ''
-    : '',
-});
+const normalizeExpense = (row) => {
+  const receiptValue = row.receipt ?? row.receipt_url ?? row.receipt_path ?? row.receiptUrl ?? row.image_url ?? row.img_url ?? '';
+  const resolvedReceipt = isSafeHttpUrl(receiptValue) || isValidImageDataUrl(receiptValue) ? receiptValue : '';
+
+  return {
+    id: row.id,
+    category: sanitizeText(row.category ?? 'Miscellaneous', 'Miscellaneous'),
+    description: sanitizeText(row.description ?? row.desc ?? 'Expense', 'Expense'),
+    vendor: sanitizeText(row.vendor ?? 'N/A', 'N/A'),
+    amount: sanitizeNumber(row.amount ?? 0, 0),
+    date: sanitizeText(row.date ?? row.spent_on ?? row.created_at?.slice(0, 10) ?? today(), today()),
+    receipt: resolvedReceipt,
+    receipt_path: resolvedReceipt,
+    receipt_url: resolvedReceipt,
+  };
+};
 
 const normalizePending = (row) => ({
   id: row.id,
@@ -344,6 +348,7 @@ export async function createExpenseRecord(expensePayload) {
     }
 
     const receiptUrl = await uploadImageToStorage(expensePayload.receipt || '', 'expense-receipts');
+    const safeReceipt = isSafeHttpUrl(receiptUrl) || isValidImageDataUrl(receiptUrl) ? receiptUrl : '';
 
     const { error } = await supabase.from('expenses').insert([
       {
@@ -352,7 +357,8 @@ export async function createExpenseRecord(expensePayload) {
         description,
         vendor,
         amount,
-        receipt_path: isSafeHttpUrl(receiptUrl) || isValidImageDataUrl(receiptUrl) ? receiptUrl : '',
+        receipt_path: safeReceipt,
+        receipt_url: safeReceipt,
         spent_on: today(),
       },
     ]);

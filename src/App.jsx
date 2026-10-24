@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { jsPDF } from 'jspdf';
 import {
   ArrowUpRight,
   Check,
   CheckCircle2,
   Clock3,
   Copy,
+  Download,
   IndianRupee,
   Lock,
   MoonStar,
@@ -286,6 +288,98 @@ function App() {
     window.setTimeout(() => setToast(''), 2500);
   };
 
+  const downloadEventSummary = (entry) => {
+    const net = Number(entry.raised || 0) - Number(entry.spent || 0);
+    const reportTitle = `${entry.name || 'Event'} Summary`;
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 40;
+    const leftColX = 60;
+    const rightColX = 260;
+    const rowHeight = 22;
+
+    pdf.setFillColor(245, 118, 34);
+    pdf.rect(0, 0, pageWidth, 82, 'F');
+
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(24);
+    pdf.text(reportTitle, margin, 48);
+
+    pdf.setTextColor(30, 41, 59);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(18);
+    pdf.text('Accountancy Details', margin, 120);
+
+    pdf.setDrawColor(203, 213, 225);
+    pdf.line(margin, 130, pageWidth - margin, 130);
+
+    const rows = [
+      ['Event Name', entry.name || 'Untitled Event'],
+      ['Report Generated', fmtDate(today())],
+      ['Event Date', fmtDate(entry.date)],
+      ['Target Budget', INR(entry.target)],
+      ['Total Raised', INR(entry.raised)],
+      ['Total Spent', INR(entry.spent)],
+      ['Net Result', `${net >= 0 ? 'Surplus' : 'Deficit'} ${INR(Math.abs(net))}`],
+      ['Reserve Fund', INR(data.reserveFund)],
+    ];
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(12);
+
+    let y = 150;
+    rows.forEach(([label, value], index) => {
+      const isEven = index % 2 === 0;
+      pdf.setFillColor(isEven ? 248 : 255, isEven ? 250 : 255, isEven ? 252 : 255);
+      pdf.rect(margin - 8, y - 14, pageWidth - (margin * 2) + 16, rowHeight + 4, 'F');
+
+      pdf.setTextColor(71, 85, 105);
+      pdf.text(label, leftColX, y);
+
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(String(value), rightColX, y, { maxWidth: pageWidth - rightColX - margin });
+
+      y += rowHeight;
+    });
+
+    y += 18;
+    pdf.setDrawColor(203, 213, 225);
+    pdf.line(margin, y, pageWidth - margin, y);
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFontSize(18);
+    pdf.text('Summary', margin, y + 28);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(12);
+    pdf.setTextColor(51, 65, 85);
+
+    const summaryLines = [
+      `This report covers the ${entry.name || 'event'} accountancy for ${fmtDate(entry.date)}.`,
+      `Total contributions received were ${INR(entry.raised)}, while total expenses were ${INR(entry.spent)}.`,
+      `The final outcome is ${net >= 0 ? 'a surplus' : 'a deficit'} of ${INR(Math.abs(net))}.`,
+      `The reserve fund carried forward is ${INR(data.reserveFund)}.`,
+    ];
+
+    let summaryY = y + 44;
+    summaryLines.forEach((line) => {
+      const wrapped = pdf.splitTextToSize(line, pageWidth - margin * 2);
+      pdf.text(wrapped, margin, summaryY);
+      summaryY += wrapped.length * 18 + 6;
+    });
+
+    const safeName = (entry.name || 'event')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'event';
+
+    pdf.save(`${safeName}-summary-${today()}.pdf`);
+    notify('PDF downloaded successfully');
+  };
+
   const raised = useMemo(
     () => data.donations.filter((item) => item.status === 'Verified').reduce((sum, item) => sum + Number(item.amount), 0),
     [data.donations]
@@ -526,6 +620,19 @@ function App() {
                         </div>
                       );
                     })}
+
+                    {data.history.length > 0 && (
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => downloadEventSummary(data.history[0])}
+                          className="inline-flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100"
+                        >
+                          <Download size={14} /> Download summary
+                        </button>
+                      </div>
+                    )}
+
                     <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                       <span className="font-semibold text-slate-800">Reserve fund:</span> {INR(data.reserveFund)} carried forward for future community events.
                     </div>
@@ -637,27 +744,30 @@ function App() {
 
         {receiptModal && (
           <Modal title="Expense receipt" onClose={() => setReceiptModal(null)}>
-            {receiptModal.receipt ? (
-              <>
-                <img
-                  src={receiptModal.receipt}
-                  alt="Expense receipt"
-                  onError={(event) => {
-                    event.currentTarget.style.display = 'none';
-                    const fallback = event.currentTarget.nextSibling;
-                    if (fallback) fallback.style.display = 'flex';
-                  }}
-                  className="max-h-[70vh] w-full rounded-2xl border border-slate-200 object-cover"
-                />
-                <div className="hidden min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+            {(() => {
+              const receiptUrl = receiptModal.receipt || receiptModal.receipt_url || receiptModal.receipt_path || '';
+              return receiptUrl ? (
+                <>
+                  <img
+                    src={receiptUrl}
+                    alt="Expense receipt"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                      const fallback = event.currentTarget.nextSibling;
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
+                    className="mx-auto max-h-[70vh] max-w-full rounded-2xl border border-slate-200 object-contain"
+                  />
+                  <div className="hidden min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+                    No receipt image available.
+                  </div>
+                </>
+              ) : (
+                <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
                   No receipt image available.
                 </div>
-              </>
-            ) : (
-              <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
-                No receipt image available.
-              </div>
-            )}
+              );
+            })()}
           </Modal>
         )}
 
@@ -994,6 +1104,14 @@ function AdminPanel({ data, setData, onClose, onLogout, notify }) {
                 }}
               >
                 <Check size={16} /> Settle event
+              </Button>
+
+              <Button
+                variant="outline"
+                className="mt-2 w-full"
+                onClick={() => downloadEventSummary(activeEvent)}
+              >
+                <Receipt size={16} /> Download summary
               </Button>
             </>
           ) : (
